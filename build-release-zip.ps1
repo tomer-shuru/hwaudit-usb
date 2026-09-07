@@ -164,10 +164,24 @@ Say ""
 Info "compressing - this takes a few minutes"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+# Entries are added by hand rather than with CreateFromDirectory, which writes
+# Windows backslashes into the entry names. The zip format says forward slashes,
+# and extractors that take it literally produce one flat folder full of files
+# called "hwaudit-usb\install.cmd" instead of a directory tree.
+#
 # Fastest, not Optimal: the ISO is already compressed, so squeezing it harder
 # costs minutes and saves almost nothing.
-[System.IO.Compression.ZipFile]::CreateFromDirectory(
-    $stage, $zip, [System.IO.Compression.CompressionLevel]::Fastest, $true)
+$archive = [System.IO.Compression.ZipFile]::Open($zip, 'Create')
+try {
+    foreach ($f in (Get-ChildItem $stage -Recurse -File)) {
+        $rel   = $f.FullName.Substring($stage.Length).TrimStart('\')
+        $entry = 'hwaudit-usb/' + ($rel -replace '\\', '/')
+        $null  = [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $archive, $f.FullName, $entry, [System.IO.Compression.CompressionLevel]::Fastest)
+    }
+} finally {
+    $archive.Dispose()
+}
 Ok "built $(Split-Path $zip -Leaf)"
 
 Remove-Item $stage -Recurse -Force
@@ -175,10 +189,10 @@ Remove-Item $stage -Recurse -Force
 $size = (Get-Item $zip).Length
 Say ""
 Say "Verifying the zip..."
-Add-Type -AssemblyName System.IO.Compression
-$archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
-$names   = $archive.Entries | ForEach-Object { $_.FullName }
-$archive.Dispose()
+$check = [System.IO.Compression.ZipFile]::OpenRead($zip)
+# Normalise anyway, so this check cannot quietly pass on a malformed archive.
+$names = @($check.Entries | ForEach-Object { $_.FullName -replace '\\', '/' })
+$check.Dispose()
 $problems = @()
 foreach ($want in @('hwaudit-usb/install.cmd', 'hwaudit-usb/install-to-stick.ps1',
                     'hwaudit-usb/READ ME FIRST.txt', 'hwaudit-usb/hwaudit/collect.sh',
