@@ -147,8 +147,13 @@ if ($needCopy) {
     Ok "source ISO hash matches"
 
     $need = (Get-Item $isoSrc).Length + 20MB
-    $free = (Get-Volume -DriveLetter $tgtLetter).SizeRemaining
-    if ($free -lt $need) {
+    $free = $null
+    try { $free = (Get-Volume -DriveLetter $tgtLetter -ErrorAction Stop).SizeRemaining } catch { }
+    if ($null -eq $free) {
+        # Mapped or substituted drives are not real volumes. Not a reason to
+        # refuse - the copy itself will fail loudly if the room is not there.
+        Warn "cannot read free space on $T - skipping the space check"
+    } elseif ($free -lt $need) {
         Die ("not enough room on {0}: need {1:N1} GB, {2:N1} GB free" -f $T, ($need / 1GB), ($free / 1GB))
     }
 }
