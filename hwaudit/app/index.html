@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hardware Diagnostics</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --tx:#e6e9ef; --dim:#98a0b0;
+  --acc:#4da3ff; --ok:#3ddc84; --warn:#ffb020; --bad:#ff5c5c;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);
+  font:15px/1.45 "DejaVu Sans",system-ui,sans-serif;overflow:hidden}
+#app{display:flex;height:100%}
+nav{width:215px;flex:0 0 215px;background:var(--panel);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;padding:14px 0}
+nav h1{font-size:14px;margin:0 16px 4px;color:var(--acc);letter-spacing:.08em;text-transform:uppercase}
+nav .tip{font-size:11px;color:var(--dim);margin:0 16px 12px;line-height:1.4}
+nav .tip b{color:var(--tx);background:#232833;border:1px solid #333a48;border-radius:4px;
+  padding:0 5px;font-weight:600}
+nav button{all:unset;padding:11px 16px;cursor:pointer;color:var(--dim);font-size:14px;
+  border-left:3px solid transparent;display:flex;gap:9px;align-items:center}
+nav button:hover{background:#1e222b;color:var(--tx)}
+nav button.on{background:#1e222b;color:var(--tx);border-left-color:var(--acc)}
+nav button .dot{width:8px;height:8px;border-radius:50%;background:#39404e;flex:0 0 8px}
+nav button.done .dot{background:var(--ok)}
+main{flex:1;overflow:auto;padding:24px 30px}
+h2{margin:0 0 4px;font-size:21px}
+.sub{color:var(--dim);margin:0 0 18px;font-size:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+button.act{all:unset;background:var(--acc);color:#04121f;font-weight:600;padding:9px 18px;
+  border-radius:7px;cursor:pointer;display:inline-block;margin:4px 6px 4px 0}
+button.act:hover{filter:brightness(1.12)}
+button.act.ghost{background:transparent;color:var(--tx);border:1px solid var(--line)}
+button.act.big{font-size:17px;padding:13px 26px}
+button.act.sel{box-shadow:0 0 0 3px rgba(77,163,255,.65);position:relative}
+button.act.ghost.sel{border-color:var(--acc);color:var(--acc)}
+table{border-collapse:collapse;width:100%}
+td{padding:4px 10px 4px 0;vertical-align:top;font-size:14px}
+td.k{color:var(--dim);width:150px;white-space:nowrap}
+label.fld{display:block;margin-bottom:14px}
+label.fld span{display:block;font-size:13px;color:var(--dim);margin-bottom:5px}
+input.txt{width:100%;max-width:420px;background:#12151b;color:var(--tx);border:1px solid var(--line);
+  border-radius:8px;padding:11px 13px;font:16px inherit}
+input.txt:focus{outline:none;border-color:var(--acc)}
+input.slider{-webkit-appearance:none;appearance:none;width:100%;max-width:420px;height:6px;
+  border-radius:3px;background:#2a2f3a;outline:none}
+input.slider::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;
+  background:var(--acc);cursor:pointer;border:none}
+input.slider::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--acc);
+  cursor:pointer;border:none}
+input.slider::-moz-range-track{height:6px;border-radius:3px;background:#2a2f3a}
+#flood{position:fixed;inset:0;z-index:99;display:none;cursor:none}
+#flood .hint{position:absolute;bottom:14px;left:0;right:0;text-align:center;
+  font-size:12px;color:#6a6a6a;font-family:monospace}
+#kb{user-select:none;display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+.kbblock{flex:0 0 auto}
+.krow{display:flex;gap:5px;margin-bottom:5px}
+.key{background:#232833;border:1px solid #333a48;border-radius:5px;min-width:38px;height:38px;
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--dim);
+  padding:0 6px;flex:0 0 auto}
+.key.hit{background:var(--ok);border-color:var(--ok);color:#06210f;font-weight:700}
+.key.now{background:var(--acc);border-color:var(--acc);color:#04121f}
+.key.gap{visibility:hidden}
+/* Fixed widths only - never flex:1, or the spacebar stretches across the
+   whole width once the window goes fullscreen. */
+.w15{min-width:59px}.w20{min-width:80px}.w25{min-width:101px}.w60{min-width:236px}
+/* mouse */
+#mwrap{display:flex;gap:20px;align-items:stretch;flex-wrap:wrap}
+#pad{flex:1;min-width:280px;height:300px;background:#12151b;border:1px dashed #333a48;
+  border-radius:9px;position:relative;overflow:hidden;cursor:crosshair}
+#dot{position:absolute;width:12px;height:12px;border-radius:50%;background:var(--acc);
+  transform:translate(-50%,-50%);pointer-events:none}
+#padhint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:#4a5160;font-size:13px;pointer-events:none}
+.mousefig{flex:0 0 190px;display:flex;align-items:center;justify-content:center;
+  background:#12151b;border:1px solid var(--line);border-radius:9px}
+.mpart{fill:#232833;stroke:#3a4252;stroke-width:2;transition:fill .12s}
+.mpart.hit{fill:var(--ok);stroke:var(--ok)}
+/* Scroll direction arrows, separate from the wheel-click target. */
+.spart{fill:#232833;stroke:#3a4252;stroke-width:1.5;transition:fill .12s}
+.spart.hit{fill:var(--ok);stroke:var(--ok)}
+/* Every press flashes white, so a second click on an already-green part is
+   still visibly registered. */
+.mpart.flash,.spart.flash{fill:#fff;stroke:#fff;transition:none}
+#mcounts{margin-top:8px}
+.mbody{fill:none;stroke:#4a5364;stroke-width:2.5}
+.mlbl{fill:#6b7484;font-size:11px;font-family:inherit}
+/* audio / cam */
+/* Mirrored, so the operator sees themselves the way a mirror shows them and
+   can line the camera up naturally. snap() flips the canvas to match. */
+video,#vimg{width:100%;max-width:620px;background:#000;border-radius:9px;display:block}
+video{transform:scaleX(-1)}
+/* Host-grabbed frames are not mirrored, so they are not flipped back. */
+#vimg{display:none}
+#shot{max-width:300px;border-radius:9px;display:none;margin-top:10px;border:1px solid var(--line)}
+textarea{width:100%;min-height:160px;background:#12151b;color:var(--tx);border:1px solid var(--line);
+  border-radius:9px;padding:12px;font:15px/1.5 inherit;resize:vertical}
+textarea:focus{outline:none;border-color:var(--acc)}
+.msg{font-size:13px;color:var(--dim);margin-top:8px}
+.msg.ok{color:var(--ok)} .msg.bad{color:var(--bad)}
+.pill{display:inline-block;font-size:12px;padding:2px 9px;border-radius:20px;
+  background:#232833;color:var(--dim);margin-left:8px}
+kbd{background:#232833;border:1px solid #333a48;border-radius:4px;padding:1px 6px;font-size:12px}
+</style>
+</head>
+<body>
+<div id="flood"><div class="hint">click or press any key for next</div></div>
+
+<div id="app">
+<nav>
+  <h1>Diagnostics</h1>
+  <p class="tip"><b>P</b> next tab &middot; <b>Tab</b> select &middot; <b>Space</b> start<br>
+   Keyboard tab: <b>Alt</b>+<b>P</b> to move on.</p>
+  <button data-p="asset"><span class="dot"></span>Asset</button>
+  <button data-p="screen"><span class="dot"></span>Screen</button>
+  <button data-p="kb"><span class="dot"></span>Keyboard</button>
+  <button data-p="mouse"><span class="dot"></span>Mouse</button>
+  <button data-p="audio"><span class="dot"></span>Speakers</button>
+  <button data-p="cam"><span class="dot"></span>Webcam</button>
+  <button data-p="wifi"><span class="dot"></span>WiFi</button>
+  <button data-p="notes"><span class="dot"></span>Diagnosis</button>
+  <div style="margin-top:auto;padding:12px 16px">
+    <button class="act ghost" style="width:100%;text-align:center" onclick="goFS()">Fullscreen</button>
+  </div>
+</nav>
+<main id="main"></main>
+</div>
+
+<script>
+const S = {}, done = {}, obs = {};
+const F = { item:'', asset_tag:'', notes:'' };      // operator-entered, kept across tab switches
+let keysHit=new Set(), btnsHit=new Set(), scrolled=false, camOK=false, tones=[];
+// Click and scroll tallies. Module level so they survive a tab switch, which
+// re-renders every page from scratch.
+let mouseCounts={0:0,1:0,2:0}, scrollCounts={up:0,down:0};
+const kbHeld=new Set(), kbUp=new Map();   // physical key state for the keyboard test
+let VOL=100;                              // volume slider, kept across tab switches
+let selIdx=0;                             // Tab-selected button on the current tab
+let cur='asset', floodOn=false, camStream=null;
+
+const ORDER=['asset','screen','kb','mouse','audio','cam','wifi','notes'];
+
+// Specs load asynchronously. Render immediately so the app is usable at once,
+// then refresh only if the operator is still sitting on the Asset tab -
+// otherwise a slow load would yank them back from wherever they navigated to.
+fetch('specs.json').then(r=>r.json()).then(j=>{
+  Object.assign(S,j);
+  if(cur==='asset') show('asset');
+}).catch(()=>{});
+
+/* Fullscreen. --kiosk needs a window manager to honour it; if that fails the
+   window stays small, so the app asks for fullscreen itself on the first click
+   and offers a manual button. This path needs no WM cooperation. */
+function goFS(){
+  if(document.fullscreenElement){
+    if(document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+  } else if(document.documentElement.requestFullscreen){
+    document.documentElement.requestFullscreen().catch(()=>{});
+  }
+}
+let fsAsked=false;
+document.addEventListener('click', ()=>{
+  if(fsAsked) return;
+  fsAsked=true;
+  if(!document.fullscreenElement && document.documentElement.requestFullscreen)
+    document.documentElement.requestFullscreen().catch(()=>{});
+}, true);
+
+const nav=[...document.querySelectorAll('nav button[data-p]')];
+nav.forEach(b=>b.onclick=()=>show(b.dataset.p));
+function mark(p){ done[p]=true; const b=nav.find(x=>x.dataset.p===p); if(b) b.classList.add('done'); }
+function show(p){
+  if(camStream && p!=='cam'){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
+  if(cur==='kb' && p!=='kb') capsOff();
+  cur=p;
+  nav.forEach(b=>b.classList.toggle('on', b.dataset.p===p));
+  document.getElementById('main').innerHTML = PAGES[p]();
+  if(INIT[p]) INIT[p]();
+  selIdx=0; updateSel();
+}
+/* Tab cycles the action buttons of the current tab, Space presses the
+   selected one. Only buttons inside <main> - the sidebar is not part of it. */
+function selectables(){ return [...document.querySelectorAll('#main button.act')]; }
+function updateSel(){
+  const b=selectables();
+  if(selIdx>=b.length) selIdx=0;
+  b.forEach((x,i)=>x.classList.toggle('sel', i===selIdx));
+}
+function next(){ const i=ORDER.indexOf(cur); if(i>-1 && i<ORDER.length-1) show(ORDER[i+1]); }
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const row = (k,v) => `<tr><td class="k">${k}</td><td>${esc(v)}</td></tr>`;
+
+/* ---------------- pages ---------------- */
+const PAGES = {
+asset: () => `<h2>Asset</h2><p class="sub">Fill these in, then press <kbd>P</kbd> to start the tests.</p>
+ <div class="card">
+  <label class="fld"><span>Item number</span>
+   <input class="txt" id="f_item" value="${esc(F.item)}" autocomplete="off"></label>
+  <label class="fld" style="margin-bottom:0"><span>Asset tag</span>
+   <input class="txt" id="f_asset" value="${esc(F.asset_tag)}" autocomplete="off"></label>
+ </div>
+ <div class="card"><table>
+ ${row('S.N',S.serial)}${row('Type',S.type)}${row('Make',S.make)}${row('Model',S.model)}
+ ${row('CPU',S.cpu)}${row('RAM',S.ram)}${row('Disk Capacity',S.disk)}
+ ${row('Battery Health',S.battery)}${row('BIOS',S.bios)}${row('WiFi chip',S.wifi_chip)}
+ </table></div>`,
+
+screen: () => `<h2>Screen</h2><p class="sub">Full-screen colour fields. Look for dead or stuck pixels, patches, backlight bleed and discolouration.</p>
+ <div class="card">
+  <button class="act big" onclick="flood(['#000000','#ffffff'])">Black &rarr; White</button>
+  <button class="act big ghost" onclick="flood(['#ff0000','#00ff00','#0000ff'])">Red &rarr; Green &rarr; Blue</button>
+  <button class="act ghost" onclick="flood(['#808080'])">Grey</button>
+  <div class="msg"><kbd>Tab</kbd> to choose, <kbd>Space</kbd> to start. Inside the test, any key
+   moves to the next colour; the last one exits.</div>
+ </div>`,
+
+kb: () => `<h2>Keyboard</h2><p class="sub">Press every key. It turns <b style="color:var(--ok)">green</b> once registered.
+  <span class="pill" id="kcount">0 keys</span></p>
+ <div class="card" id="kb"></div>
+ <button class="act ghost" onclick="keysHit.clear();drawKB();">Reset</button>
+ <span class="msg">Here <kbd>P</kbd> is a key under test &mdash; use <kbd>Alt</kbd>+<kbd>P</kbd> to move on.</span>
+ <div class="msg">Note: <b>Fn</b> keys for brightness and volume are handled by the machine
+  itself, not by this app &mdash; pressing brightness-down can dim the screen to black.
+  Press brightness-up to bring it back.</div>`,
+
+mouse: () => `<h2>Mouse / Touchpad</h2><p class="sub">Move the pointer in the box, then click each button, press the wheel and roll it &mdash; the drawing lights up and flashes on every press.</p>
+ <div class="card"><div id="mwrap">
+  <div id="pad"><div id="padhint">move the pointer here</div><div id="dot" style="left:50%;top:50%"></div></div>
+  <div class="mousefig">
+   <svg viewBox="0 0 170 280" width="170" height="280">
+    <path class="mpart" id="m0" d="M85,14 C46,14 26,54 26,112 L79,112 L79,14 Z"/>
+    <path class="mpart" id="m2" d="M85,14 C124,14 144,54 144,112 L91,112 L91,14 Z"/>
+    <path class="spart" id="sup" d="M85,26 L94,40 L76,40 Z"/>
+    <rect class="mpart" id="m1" x="77" y="44" width="16" height="42" rx="8"/>
+    <path class="spart" id="sdn" d="M85,104 L94,90 L76,90 Z"/>
+    <path class="mbody" d="M85,12 C44,12 24,52 24,112 L24,196 C24,242 51,262 85,262
+      C119,262 146,242 146,196 L146,112 C146,52 126,12 85,12 Z"/>
+    <line class="mbody" x1="24" y1="112" x2="146" y2="112" stroke-width="2"/>
+    <text class="mlbl" x="52" y="102" text-anchor="middle">left</text>
+    <text class="mlbl" x="118" y="102" text-anchor="middle">right</text>
+    <text class="mlbl" x="85" y="140" text-anchor="middle">wheel: press it</text>
+    <text class="mlbl" x="85" y="156" text-anchor="middle">arrows = scroll</text>
+   </svg>
+  </div>
+ </div>
+ <div class="msg" id="mcounts"></div></div>`,
+
+audio: () => `<h2>Speakers</h2><p class="sub">A short tune is generated by the app. Play it through each channel separately.</p>
+ <div class="card">
+  <label class="fld"><span>Volume <b id="volnum">${VOL}</b>% &mdash; arrow keys adjust</span>
+   <input type="range" id="vol" class="slider" min="0" max="100" step="1" value="${VOL}"></label>
+  <button class="act big" onclick="playTune('both')">&#9654; Both</button>
+  <button class="act big ghost" onclick="playTune('left')">&#9664; Left only</button>
+  <button class="act big ghost" onclick="playTune('right')">Right only &#9654;</button>
+  <button class="act ghost" onclick="sweep()">Sweep 200&ndash;4000 Hz</button>
+  <div class="msg" id="amsg">Nothing played yet.</div>
+  <div class="msg">System audio devices:<br><code>${esc(S.audio_cards||'none')}</code></div>
+ </div>`,
+
+cam: () => `<h2>Webcam</h2><p class="sub">Live image from the camera.</p>
+ <div class="card">
+  <video id="v" autoplay playsinline muted></video>
+  <img id="vimg">
+  <div class="msg" id="cmsg">Starting camera&hellip;</div>
+  <button class="act" onclick="snap()">Freeze a frame</button>
+  <img id="shot">
+ </div>`,
+
+wifi: () => `<h2>WiFi</h2><p class="sub">Scanned by the system before this app started. Seeing networks proves the radio works.</p>
+ <div class="card"><table>
+  ${row('Chip',S.wifi_chip)}${row('Interface',S.wifi_if)}${row('Networks seen',S.wifi_count)}
+ </table><div class="msg">${esc(S.wifi_list||'')}</div></div>`,
+
+notes: () => `<h2>Your diagnosis</h2><p class="sub">This text becomes the Diagnostics field of this machine's line in reports.txt.</p>
+ <div class="card">
+  <textarea id="notes" placeholder="e.g. Screen has a scratch bottom-left. Battery weak. Keyboard and webcam fine.">${esc(F.notes)}</textarea>
+ </div>
+ <button class="act big" onclick="save()">Save &amp; finish</button>
+ <div class="msg" id="smsg"></div>`
+};
+
+/* ---------------- screen flood ---------------- */
+let fq=[],fi=0;
+function flood(cols){
+  fq=cols; fi=0; floodOn=true;
+  const f=document.getElementById('flood');
+  f.style.display='block'; f.style.background=fq[0];
+  // Go truly fullscreen so the colour covers the whole panel, not just the
+  // browser viewport. Called from a click, so the gesture requirement is met.
+  const wasFS = !!document.fullscreenElement;
+  const el=document.documentElement;
+  if(!wasFS && el.requestFullscreen) el.requestFullscreen().catch(()=>{});
+
+  // Advance on the PRESS only: not while a key is held, not on release.
+  // X11 auto-repeat is delivered as keyup+keydown pairs, so e.repeat is false
+  // and the down-state alone is not enough - the gap since that key's last
+  // release is the reliable discriminator.
+  const held=new Set(), lastUp=new Map();
+  let last=0;
+
+  const advance=()=>{
+    const now=Date.now();
+    if(now-last < 250) return;
+    last=now;
+    fi++;
+    if(fi>=fq.length) cleanup(); else f.style.background=fq[fi];
+  };
+  const onDown=(e)=>{
+    e.preventDefault(); e.stopPropagation();
+    if(e.key==='Escape'){ cleanup(); return; }   // always a way out
+    if(e.repeat) return;
+    if(held.has(e.code)) return;
+    if(Date.now() - (lastUp.get(e.code)||0) < 60) return;   // synthetic repeat
+    held.add(e.code);
+    advance();
+  };
+  const onUp=(e)=>{ e.preventDefault(); held.delete(e.code); lastUp.set(e.code, Date.now()); };
+  function cleanup(){
+    f.style.display='none'; floodOn=false;
+    document.removeEventListener('keydown',onDown,true);
+    document.removeEventListener('keyup',onUp,true);
+    f.onclick=null;
+    // Only drop out of fullscreen if the flood is what put us there.
+    if(!wasFS && document.fullscreenElement && document.exitFullscreen)
+      document.exitFullscreen().catch(()=>{});
+    mark('screen'); obs.screen=fq.length+' colour fields viewed';
+  }
+  f.onclick=()=>advance();
+  document.addEventListener('keydown',onDown,true);
+  document.addEventListener('keyup',onUp,true);
+}
+
+/* ---------------- keyboard ---------------- */
+const KROWS=[
+ [['Escape','Esc','w15'],['F1','F1'],['F2','F2'],['F3','F3'],['F4','F4'],['F5','F5'],['F6','F6'],
+  ['F7','F7'],['F8','F8'],['F9','F9'],['F10','F10'],['F11','F11'],['F12','F12'],['Delete','Del','w15']],
+ [['Backquote','`'],['Digit1','1'],['Digit2','2'],['Digit3','3'],['Digit4','4'],['Digit5','5'],['Digit6','6'],
+  ['Digit7','7'],['Digit8','8'],['Digit9','9'],['Digit0','0'],['Minus','-'],['Equal','='],['Backspace','Bksp','w20']],
+ [['Tab','Tab','w15'],['KeyQ','Q'],['KeyW','W'],['KeyE','E'],['KeyR','R'],['KeyT','T'],['KeyY','Y'],['KeyU','U'],
+  ['KeyI','I'],['KeyO','O'],['KeyP','P'],['BracketLeft','['],['BracketRight',']'],['Backslash','\\','w15']],
+ [['CapsLock','Caps','w20'],['KeyA','A'],['KeyS','S'],['KeyD','D'],['KeyF','F'],['KeyG','G'],['KeyH','H'],
+  ['KeyJ','J'],['KeyK','K'],['KeyL','L'],['Semicolon',';'],['Quote','\''],['Enter','Enter','w25']],
+ [['ShiftLeft','Shift','w25'],['KeyZ','Z'],['KeyX','X'],['KeyC','C'],['KeyV','V'],['KeyB','B'],['KeyN','N'],
+  ['KeyM','M'],['Comma',','],['Period','.'],['Slash','/'],['ShiftRight','Shift','w25']],
+ [['ControlLeft','Ctrl','w15'],['MetaLeft','Win','w15'],['AltLeft','Alt','w15'],['Space','Space','w60'],
+  ['AltRight','Alt','w15'],['ControlRight','Ctrl','w15'],
+  ['ArrowLeft','←'],['ArrowUp','↑'],['ArrowDown','↓'],['ArrowRight','→']]
+];
+// Navigation cluster. Delete is deliberately not repeated here - it already
+// sits in the function row above, and two keys with the same code would give
+// duplicate element ids, so only the first would ever light up.
+const KNAV=[
+ [['PrintScreen','PrtSc'],['ScrollLock','ScrLk'],['Pause','Pause']],
+ [['Insert','Ins'],['Home','Home'],['PageUp','PgUp']],
+ [['ContextMenu','Menu'],['End','End'],['PageDown','PgDn']]
+];
+const KNUM=[
+ [['NumLock','Num'],['NumpadDivide','/'],['NumpadMultiply','*'],['NumpadSubtract','-']],
+ [['Numpad7','7'],['Numpad8','8'],['Numpad9','9'],['NumpadAdd','+']],
+ [['Numpad4','4'],['Numpad5','5'],['Numpad6','6'],['','','gap']],
+ [['Numpad1','1'],['Numpad2','2'],['Numpad3','3'],['NumpadEnter','Ent']],
+ [['Numpad0','0','w20'],['NumpadDecimal','.'],['','','gap']]
+];
+function keyHTML(k){
+  if(!k[0]) return '<div class="key gap"></div>';
+  return `<div class="key ${k[2]||''} ${keysHit.has(k[0])?'hit':''}" id="k-${k[0]}">${k[1]}</div>`;
+}
+function blockHTML(rows){
+  return '<div class="kbblock">'+rows.map(r=>'<div class="krow">'+r.map(keyHTML).join('')+'</div>').join('')+'</div>';
+}
+function drawKB(){
+  const el=document.getElementById('kb'); if(!el) return;
+  el.innerHTML = blockHTML(KROWS) + blockHTML(KNAV) + blockHTML(KNUM);
+  const c=document.getElementById('kcount'); if(c) c.textContent=keysHit.size+' keys';
+}
+
+/* Nothing but the keys we implement may do anything. Blocks the context menu
+   (mouse and the Menu key) and every browser shortcut - F11, F5, Ctrl+W,
+   Ctrl+F, Alt+Left, quick-find, etc. Text fields are exempt so typing works. */
+const isTyping = e => {
+  const t=(e.target && e.target.tagName || '').toUpperCase();
+  return t==='INPUT' || t==='TEXTAREA';
+};
+document.addEventListener('contextmenu', e=>{ e.preventDefault(); }, true);
+document.addEventListener('keypress', e=>{ if(!isTyping(e)) e.preventDefault(); }, true);
+document.addEventListener('dragstart', e=>e.preventDefault(), true);
+
+/* ---------------- global keys: P = next tab, key capture on kb tab -------- */
+document.addEventListener('keydown', e=>{
+  const typing = isTyping(e);
+  if(!typing) e.preventDefault();        // swallow the shortcut before anything else
+  if(floodOn) return;                    // flood has its own handler
+  const isP = (e.key==='p'||e.key==='P');
+
+  if(!typing && !e.repeat){
+    if(cur==='kb'){
+      if(isP && e.altKey){ e.preventDefault(); next(); return; }
+    } else if(isP && !e.altKey && !e.ctrlKey && !e.metaKey){
+      e.preventDefault(); next(); return;
+    }
+  }
+
+  // Tab / Space / volume arrows. Never on the keyboard tab, where Tab, Space
+  // and the arrows are keys being tested.
+  if(!typing && cur!=='kb'){
+    const btns=selectables();
+    if(e.key==='Tab' && btns.length){
+      e.preventDefault();
+      if(!e.repeat){ selIdx=(selIdx+(e.shiftKey?-1:1)+btns.length)%btns.length; updateSel(); }
+      return;
+    }
+    if((e.key===' '||e.code==='Space') && btns.length){
+      e.preventDefault();
+      if(!e.repeat && btns[selIdx]) btns[selIdx].click();
+      return;
+    }
+    if(cur==='audio'){
+      if(e.key==='ArrowRight'||e.key==='ArrowUp'){ e.preventDefault(); setVol(VOL+5); return; }
+      if(e.key==='ArrowLeft' ||e.key==='ArrowDown'){ e.preventDefault(); setVol(VOL-5); return; }
+    }
+  }
+  if(cur!=='kb' || typing) return;
+
+  // Same X11 auto-repeat defence as the screen test: ignore repeats and any
+  // press arriving within 60ms of that key's own release.
+  if(e.repeat) return;
+  if(kbHeld.has(e.code)) return;
+  if(Date.now() - (kbUp.get(e.code)||0) < 60) return;
+  kbHeld.add(e.code);
+
+  keysHit.add(e.code);
+  const el=document.getElementById('k-'+e.code);
+  if(el){
+    el.classList.add('hit');
+    el.classList.add('now');
+    setTimeout(()=>el.classList.remove('now'),120);
+  }
+  const c=document.getElementById('kcount'); if(c) c.textContent=keysHit.size+' keys';
+  if(keysHit.size>3) mark('kb');
+  obs.keyboard=keysHit.size+' distinct keys registered';
+});
+
+document.addEventListener('keyup', e=>{
+  kbHeld.delete(e.code);
+  kbUp.set(e.code, Date.now());
+}, true);
+
+/* Caps Lock is one of the keys under test, so the operator usually leaves the
+   keyboard tab with it latched and then types the diagnosis in capitals. A page
+   cannot clear a modifier itself - ask the local server, which does it through
+   X. Fire and forget: it is a convenience, never a reason to block the tests.
+   Called from show() whenever the keyboard tab is left. */
+function capsOff(){
+  try{ fetch('capsoff',{method:'POST',body:''}).catch(()=>{}); }catch(e){}
+}
+
+/* ---------------- asset fields ---------------- */
+// The textarea is destroyed on every tab switch, so its text has to be kept
+// in F.notes as it is typed - not just read back when Save is pressed.
+function initNotes(){
+  const ta=document.getElementById('notes');
+  if(!ta) return;
+  ta.value=F.notes;
+  ta.oninput=()=>{ F.notes=ta.value; if(F.notes.trim()) mark('notes'); };
+  ta.focus();
+  ta.selectionStart=ta.selectionEnd=ta.value.length;
+}
+
+function initAsset(){
+  const i=document.getElementById('f_item'), a=document.getElementById('f_asset');
+  i.oninput=()=>{F.item=i.value; if(F.item) mark('asset');};
+  a.oninput=()=>{F.asset_tag=a.value; if(F.asset_tag) mark('asset');};
+  // Enter chains: item -> asset tag -> straight into the screen test.
+  i.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); a.focus(); a.select(); } };
+  a.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); a.blur(); show('screen'); } };
+  i.focus(); i.select();
+}
+
+/* ---------------- mouse ---------------- */
+function initMouse(){
+  const wrap=document.getElementById('mwrap'), pad=document.getElementById('pad'),
+        dot=document.getElementById('dot'), hint=document.getElementById('padhint');
+  pad.onmousemove=e=>{ const r=pad.getBoundingClientRect();
+    dot.style.left=(e.clientX-r.left)+'px'; dot.style.top=(e.clientY-r.top)+'px';
+    if(hint) hint.style.display='none'; mark('mouse'); };
+  // Restart the flash even if the class is already on the element, so holding
+  // a button down and clicking again both read as separate presses.
+  function flash(id){ const p=document.getElementById(id); if(!p) return;
+    p.classList.remove('flash'); void p.offsetWidth; p.classList.add('flash');
+    setTimeout(()=>p.classList.remove('flash'),160); }
+  function light(id){ const p=document.getElementById(id); if(p) p.classList.add('hit'); flash(id); }
+
+  // preventDefault also stops Firefox starting autoscroll on the wheel press,
+  // which otherwise puts a scroll cursor over the test.
+  wrap.onmousedown=e=>{ e.preventDefault(); btnsHit.add(e.button);
+    mouseCounts[e.button]=(mouseCounts[e.button]||0)+1;
+    light('m'+e.button); counts(); upd(); };
+  wrap.oncontextmenu=e=>e.preventDefault();
+  wrap.onwheel=e=>{ e.preventDefault(); scrolled=true;
+    const up=e.deltaY<0;
+    if(up) scrollCounts.up++; else scrollCounts.down++;
+    light(up?'sup':'sdn'); counts(); upd(); };
+
+  // Re-apply everything recorded so far - this page is rebuilt on every visit.
+  [...btnsHit].forEach(b=>{const p=document.getElementById('m'+b); if(p) p.classList.add('hit');});
+  if(scrollCounts.up){const p=document.getElementById('sup'); if(p) p.classList.add('hit');}
+  if(scrollCounts.down){const p=document.getElementById('sdn'); if(p) p.classList.add('hit');}
+  counts();
+
+  function counts(){ const el=document.getElementById('mcounts'); if(!el) return;
+    el.textContent='left ×'+mouseCounts[0]+'   wheel press ×'+mouseCounts[1]
+      +'   right ×'+mouseCounts[2]+'   scroll up ×'+scrollCounts.up
+      +'   scroll down ×'+scrollCounts.down; }
+  function upd(){ const names={0:'left',1:'wheel press',2:'right'};
+    obs.mouse='buttons: '+([...btnsHit].sort().map(b=>names[b]||b).join(', ')||'none')
+      +(scrolled?'; scroll up '+scrollCounts.up+'/down '+scrollCounts.down:''); mark('mouse'); }
+}
+
+/* ---------------- audio ---------------- */
+let ac;
+function actx(){ if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)();
+  if(ac.state==='suspended') ac.resume(); return ac; }
+// 100% really is full scale (gain 1.0), not a scaled-down "100".
+const gain = () => Math.max(0.0001, VOL/100);
+function setVol(v){
+  VOL=Math.max(0,Math.min(100,Math.round(v)));
+  const s=document.getElementById('vol'), n=document.getElementById('volnum');
+  if(s) s.value=VOL;
+  if(n) n.textContent=VOL;
+}
+
+// A rising major arpeggio, easier to judge than a flat beep: you hear each
+// note land, so a crackling or dead channel is obvious.
+const TUNE=[523.25, 659.25, 783.99, 1046.50];
+function playTune(side){
+  const a=actx(); let t=a.currentTime+0.05; const v=gain();
+  TUNE.forEach(f=>{
+    const o=a.createOscillator(), g=a.createGain(), p=a.createStereoPanner();
+    o.type='triangle'; o.frequency.value=f;
+    p.pan.value = side==='left'?-1 : side==='right'?1 : 0;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(v,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.34);
+    o.connect(g); g.connect(p); p.connect(a.destination);
+    o.start(t); o.stop(t+0.36);
+    t+=0.18;
+  });
+  tones.push(side); note('Played the tune — '+side+' at '+VOL+'%','ok');
+  mark('audio'); obs.audio='tune played: '+tones.join(',')+' at vol '+VOL+'%';
+}
+function sweep(){
+  const a=actx(), o=a.createOscillator(), g=a.createGain();
+  o.type='sine'; g.gain.value=gain(); o.frequency.setValueAtTime(200,a.currentTime);
+  o.frequency.exponentialRampToValueAtTime(4000,a.currentTime+3);
+  o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+3);
+  tones.push('sweep'); note('Sweeping 200→4000 Hz','ok'); mark('audio');
+  obs.audio='tune played: '+tones.join(',')+' at vol '+VOL+'%';
+}
+function note(t,c){const m=document.getElementById('amsg'); if(m){m.textContent=t; m.className='msg '+(c||'');}}
+function initAudio(){
+  const s=document.getElementById('vol');
+  if(!s) return;
+  s.oninput=()=>setVol(parseInt(s.value,10)||0);
+  // Keep the slider out of the tab order - Tab is for the action buttons.
+  s.tabIndex=-1;
+}
+
+/* ---------------- webcam ---------------- */
+function initCam(){
+  const v=document.getElementById('v'), m=document.getElementById('cmsg');
+  // No mediaDevices at all (non-secure context, or a build without it) would
+  // throw here rather than reject, skipping the fallback entirely.
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    hostCam({name:'NoMediaDevices'}); return; }
+  navigator.mediaDevices.getUserMedia({video:{width:1280,height:720},audio:false})
+   .then(s=>{ camStream=s; v.srcObject=s; camOK=true;
+              m.textContent='Camera is streaming.'; m.className='msg ok';
+              mark('cam'); obs.webcam='live image OK'; })
+   .catch(e=>{ hostCam(e); });
+}
+/* MIPI/IPU6 cameras (Meteor Lake era Dells) expose only raw ISYS nodes, which
+   the browser cannot open - getUserMedia fails with NotFoundError or
+   AbortError. Reaching them through PipeWire would need xdg-desktop-portal and
+   a permission dialog, so instead the host grabs frames with libcamera and
+   server.py serves them. Slower than a real stream, same proof: a picture that
+   moves when you do. USB webcams never get here. */
+function hostCam(origErr){
+  const v=document.getElementById('v'), i=document.getElementById('vimg'),
+        m=document.getElementById('cmsg');
+  v.style.display='none'; i.style.display='block';
+  m.textContent='Browser camera unavailable ('+origErr.name+') - trying the host camera\u2026';
+  let ok=0, fail=0;
+  const tick=()=>{
+    if(cur!=='cam') return;              // operator moved on, stop polling
+    fetch('/camframe.bmp?t='+Date.now())
+     .then(r=> r.ok ? r.blob() : r.text().then(t=>{ throw new Error(t); }))
+     .then(b=>{ const u=URL.createObjectURL(b);
+                if(i.dataset.u) URL.revokeObjectURL(i.dataset.u);
+                i.dataset.u=u; i.src=u;
+                if(!ok){ camOK=true; mark('cam');
+                         obs.webcam='live image OK (host libcamera)'; }
+                ok++; fail=0;
+                m.textContent='Host camera streaming ('+ok+' frames).';
+                m.className='msg ok';
+                setTimeout(tick,300); })
+     .catch(e=>{ if(++fail>=3){
+                   m.textContent='Camera failed: '+origErr.name+' \u2014 host capture also failed: '+e.message;
+                   m.className='msg bad';
+                   // Carry the host's reason into the log. Without it the
+                   // report only ever said "host capture" and the real cause
+                   // (a missing libSDL2) stayed on screen and was lost.
+                   obs.webcam='FAILED: '+origErr.name+' + host capture: '
+                              +(e.message||'').replace(/\s+/g,' ').slice(0,120);
+                 } else setTimeout(tick,800); });
+  };
+  tick();
+}
+function snap(){
+  const v=document.getElementById('v'), im=document.getElementById('vimg');
+  const c=document.createElement('canvas'), g=c.getContext('2d');
+  if(v && v.videoWidth){
+    c.width=v.videoWidth; c.height=v.videoHeight;
+    g.translate(c.width,0); g.scale(-1,1);   // match the mirrored live preview
+    g.drawImage(v,0,0);
+  } else if(im && im.naturalWidth){
+    c.width=im.naturalWidth; c.height=im.naturalHeight;
+    g.drawImage(im,0,0);                     // host frames are not mirrored
+  } else return;
+  const i=document.getElementById('shot');
+  i.src=c.toDataURL('image/jpeg',.7); i.style.display='block';
+}
+
+/* ---------------- save ---------------- */
+function save(){
+  const ta=document.getElementById('notes'); if(ta) F.notes=ta.value;
+  F.notes=(F.notes||'').trim();
+  const m=document.getElementById('smsg'); m.textContent='Saving…'; m.className='msg';
+  fetch('/save',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({item:F.item,asset_tag:F.asset_tag,notes:F.notes,observations:obs,
+      keys:keysHit.size,buttons:[...btnsHit],scroll:scrolled,camera:camOK,tones:tones})})
+   .then(()=>{m.textContent='Saved. Returning to the console…';m.className='msg ok';})
+   .catch(e=>{m.textContent='Save failed: '+e;m.className='msg bad';});
+}
+
+const INIT={asset:initAsset,kb:drawKB,mouse:initMouse,audio:initAudio,cam:initCam,notes:initNotes};
+show('asset');
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+# The ISOs are 1-1.4 GB each and are not ours to redistribute. Drop
+# systemrescue-13.02-amd64.iso in images\ by hand; install-to-stick.ps1 looks
+# for it there. See README.md.
+images/
+*.iso
+
+# Audit output. Contains customer serial numbers and asset tags - it must never
+# reach a repository.
+specs/
+reports.txt
+*.log
+
+# Generated at install time from hwaudit/collect.sh. Never edit it directly.
+autorun
+
+.claude/

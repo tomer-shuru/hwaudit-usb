@@ -1,0 +1,16 @@
+# Everything that lands on the stick is read by Linux. A CRLF in collect.sh
+# breaks the shebang silently, so line endings are pinned here rather than left
+# to core.autocrlf on whichever Windows box does the clone.
+*.sh    text eol=lf
+*.py    text eol=lf
+*.html  text eol=lf
+*.cfg   text eol=lf
+*.txt   text eol=lf
+*.md    text eol=lf
+
+# Windows-side helpers stay CRLF.
+*.ps1   text eol=crlf
+*.cmd   text eol=crlf
+
+*.zst   binary
+*.iso   binary
