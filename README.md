@@ -42,8 +42,14 @@ stick, and verifies everything it wrote before reporting success.
 
 ### You need the SystemRescue ISO
 
-`systemrescue-13.02-amd64.iso` is **not in this repository** — 1.4 GB, and not ours
-to redistribute. The installer looks for it in this order:
+`systemrescue-13.02-amd64.iso` is **not in this repository** — git refuses files over
+100 MB and this one is 1.4 GB.
+
+**If you got this as a release zip from GitHub, the ISO is already inside it** and
+there is nothing to do. The rest of this section is only for someone working from a
+clone of the repository.
+
+The installer looks for it in this order:
 
 1. `-IsoPath` if you passed one
 2. `images\` next to the installer
@@ -63,27 +69,39 @@ SHA256  ad4d670b72859d887c7960142a9a9d36a3e50446694a035e254442f65d6e7572
 The installer checks that hash before and after copying and refuses to proceed on a
 mismatch.
 
-## Publishing to the share
+## Cutting a release
 
 This half is for whoever maintains the tool — coworkers never run it.
 
+**The ISO cannot be committed.** Git refuses files over 100 MB and this one is
+1.4 GB. A GitHub Release attachment may be up to 2 GB, so that is where it goes.
+The repository holds the source; the release holds the ready-to-use bundle.
+
+1. Plug in a Blancco stick that already has the tool — the ISO is copied from it.
+2. Commit and push everything first, so the zip can name a real commit.
+3. Build it:
+
 ```powershell
-.\publish-to-share.ps1 -Share \\fileserver\it\hwaudit   # first time
-.\publish.cmd                                            # afterwards, double-click
+.\build-release-zip.cmd -Tag v1.0
 ```
 
-It copies the installable tree **plus the ISO** to the share, so a coworker needs
-nothing else: they open the share, plug their stick in, and double-click
-`install.cmd`. The share gets a plain folder — no `.git` — and history stays in this
-repository.
+That produces `dist\hwaudit-usb-v1.0.zip` — the tool, the installer, the ISO, and a
+plain-language `READ ME FIRST.txt`. It verifies the ISO's hash before packing, checks
+the finished zip really contains everything, and fails if the result exceeds
+GitHub's 2 GB limit.
 
-The destination is remembered in `.publish-target` (gitignored, local to your
-machine), so later runs need no argument.
+4. On github.com: **Releases → Draft a new release → create the tag → drag the zip
+   in → Publish release.**
 
-It warns if the repository has uncommitted changes, because it stamps the share with
-`VERSION.txt` naming the commit it came from. Commit first if you want to be able to
-tell later exactly what people are running. After any change to the tool, re-run it —
-coworkers then re-run `install.cmd` against their sticks.
+Coworkers download it from the Releases page, extract, and double-click
+`install.cmd`.
+
+**The repository is private, so coworkers must be collaborators to download it** —
+add them under *Settings → Collaborators*. Nothing here should be made public: it is
+company tooling and it documents Blancco's licensing behaviour.
+
+After any change to the tool: commit, push, build a new zip with a new tag, and tell
+people to re-run `install.cmd`.
 
 ## Using it
 
@@ -162,8 +180,8 @@ hwaudit/camera/                 libcamera + SDL packages for MIPI/IPU6 laptops
 boot/grub/hwaudit-menu.cfg      the menu block spliced into each stick's grub.cfg
 install-to-stick.ps1            the installer - what coworkers run
 install.cmd                     double-click wrapper for it
-publish-to-share.ps1            pushes a new version to the network share
-publish.cmd                     double-click wrapper for it
+build-release-zip.ps1           packs the release zip, ISO included
+build-release-zip.cmd           double-click wrapper for it
 ```
 
 Deliberately **not** in here:

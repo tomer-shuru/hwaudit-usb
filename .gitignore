@@ -15,5 +15,6 @@ autorun
 
 .claude/
 
-# Remembered network share for publish-to-share.ps1 - local to this machine.
-.publish-target
+
+# Built release zips - attached to GitHub Releases, not committed.
+dist/
