@@ -96,9 +96,15 @@ GitHub's 2 GB limit.
 Coworkers download it from the Releases page, extract, and double-click
 `install.cmd`.
 
-**The repository is private, so coworkers must be collaborators to download it** —
-add them under *Settings → Collaborators*. Nothing here should be made public: it is
-company tooling and it documents Blancco's licensing behaviour.
+**The repository is public**, so anyone with the link can download a release — coworkers
+need no GitHub account and no invitation. Just send them the Releases URL.
+
+That makes `.gitignore` the only thing standing between customer data and the open
+internet. **Never commit `specs\`, `reports.txt` or any audit log** — they carry
+customer serial numbers and asset tags, and a public commit is effectively permanent
+once it has been cloned, forked or cached. If one ever slips in, deleting the file in
+a later commit does not remove it from history; say so immediately rather than
+quietly patching over it.
 
 After any change to the tool: commit, push, build a new zip with a new tag, and tell
 people to re-run `install.cmd`.
