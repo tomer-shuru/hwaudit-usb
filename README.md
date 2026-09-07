@@ -63,6 +63,28 @@ SHA256  ad4d670b72859d887c7960142a9a9d36a3e50446694a035e254442f65d6e7572
 The installer checks that hash before and after copying and refuses to proceed on a
 mismatch.
 
+## Publishing to the share
+
+This half is for whoever maintains the tool — coworkers never run it.
+
+```powershell
+.\publish-to-share.ps1 -Share \\fileserver\it\hwaudit   # first time
+.\publish.cmd                                            # afterwards, double-click
+```
+
+It copies the installable tree **plus the ISO** to the share, so a coworker needs
+nothing else: they open the share, plug their stick in, and double-click
+`install.cmd`. The share gets a plain folder — no `.git` — and history stays in this
+repository.
+
+The destination is remembered in `.publish-target` (gitignored, local to your
+machine), so later runs need no argument.
+
+It warns if the repository has uncommitted changes, because it stamps the share with
+`VERSION.txt` naming the commit it came from. Commit first if you want to be able to
+tell later exactly what people are running. After any change to the tool, re-run it —
+coworkers then re-run `install.cmd` against their sticks.
+
 ## Using it
 
 Boot the target machine from the stick. **Secure Boot must be off** — Blancco's
@@ -138,8 +160,10 @@ hwaudit/camera/                 libcamera + SDL packages for MIPI/IPU6 laptops
                                 (Dell Latitude 7440/7450, Meteor Lake). Only used
                                 when the camera probe returns CAM_KIND=mipi.
 boot/grub/hwaudit-menu.cfg      the menu block spliced into each stick's grub.cfg
-install-to-stick.ps1            the installer
+install-to-stick.ps1            the installer - what coworkers run
 install.cmd                     double-click wrapper for it
+publish-to-share.ps1            pushes a new version to the network share
+publish.cmd                     double-click wrapper for it
 ```
 
 Deliberately **not** in here:

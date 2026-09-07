@@ -14,3 +14,6 @@ reports.txt
 autorun
 
 .claude/
+
+# Remembered network share for publish-to-share.ps1 - local to this machine.
+.publish-target
