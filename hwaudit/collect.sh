@@ -621,8 +621,10 @@ fi
   echo "  wifi modules loaded:"
   lsmod 2>&1 | grep -E '^(iwl|ath|rtw|mt7|cfg80211|mac80211|dell_)' | awk '{print "    "$1}'
   echo "  wifi dmesg:"
+  # A failed iwlwifi probe dumps hundreds of "Host monitor block"/"value [iter"
+  # register lines; drop them or they push the actual error out of the window.
   dmesg 2>&1 | grep -iE 'iwlwifi|iwlmvm|ath1[01]k|ath9k|rtw|mt79|cfg80211|wlan|firmware.*(fail|not found|error)' \
-      | tail -40 | sed 's/^/    /'
+      | grep -vE 'value \[iter|Host monitor block' | tail -60 | sed 's/^/    /'
 } >>"$GUILOG" 2>&1
 echo "  wifi: $WIF, $WIFI_COUNT networks"
 
