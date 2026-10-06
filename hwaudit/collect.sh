@@ -584,7 +584,7 @@ echo "  audio server: $AUDIO_BACKEND"
 
 # --- wifi scan --------------------------------------------------------
 echo "Scanning WiFi..."
-modprobe -a iwlwifi ath10k_pci ath11k_pci rtw88_pci mt7921e 2>/dev/null
+WIFI_MODPROBE="$(modprobe -a iwlwifi ath10k_pci ath11k_pci rtw88_pci mt7921e 2>&1)"
 udevadm settle --timeout=5 2>/dev/null
 WIF="$(iw dev 2>/dev/null | awk '/Interface/{print $2; exit}')"
 WIFI_COUNT=0; WIFI_LIST=""
@@ -609,7 +609,21 @@ if [ -n "$WIF" ]; then
 fi
 [ -n "$WIF" ] || WIF="none"
 { echo "[$STAMP] wifi if=$WIF count=$WIFI_COUNT"; iw dev 2>&1 | head -10
-  rfkill list 2>&1 | head -10; } >>"$GUILOG" 2>&1
+  rfkill list 2>&1 | head -20
+  # Enough to tell "no wifi" apart: chip absent from the bus (BIOS off /
+  # unseated), chip present but no driver bound, or driver/firmware failed.
+  echo "  chip     : $WIFI_CHIP"
+  echo "  network controllers (lspci -nnk):"
+  lspci -nnk 2>&1 | awk '/^[0-9a-f]/{p=/Network controller|Ethernet controller/} p' | sed 's/^/    /'
+  echo "  wireless usb devices:"
+  lsusb 2>&1 | grep -iE 'wlan|wireless|802\.11|bluetooth' | sed 's/^/    /'
+  echo "  modprobe: ${WIFI_MODPROBE:-ok}"
+  echo "  wifi modules loaded:"
+  lsmod 2>&1 | grep -E '^(iwl|ath|rtw|mt7|cfg80211|mac80211|dell_)' | awk '{print "    "$1}'
+  echo "  wifi dmesg:"
+  dmesg 2>&1 | grep -iE 'iwlwifi|iwlmvm|ath1[01]k|ath9k|rtw|mt79|cfg80211|wlan|firmware.*(fail|not found|error)' \
+      | tail -40 | sed 's/^/    /'
+} >>"$GUILOG" 2>&1
 echo "  wifi: $WIF, $WIFI_COUNT networks"
 
 # ======================================================================
